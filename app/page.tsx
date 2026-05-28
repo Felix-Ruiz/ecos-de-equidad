@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, ChangeEvent, FormEvent } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import Papa from 'papaparse';
-import { Search, Upload, UserPlus, Check, X } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Search, Upload, UserPlus, X } from 'lucide-react';
 
 interface Participante {
   id: string;
@@ -58,37 +58,51 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    Papa.parse(file, {
-      skipEmptyLines: true,
-      complete: async (results: any) => {
-        const dataRows = results.data.slice(1);
-        
-        const toInsert = dataRows.map((row: any[]) => ({
-          documento: row[0] || '',
-          tipo_documento: row[1] || '',
-          nombre: row[2] || '',
-          apellido: row[3] || '',
-          correo: row[4] || '',
-          institucion: row[5] || '',
-          cargo: row[7] || '',
-          telefono: row[8] || '',
-          sexo: row[9] || '',
-          ciudad: row[10] || '',
-          pais: row[11] || '',
-          asistencia: false,
-          origen: 'archivo'
-        }));
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const bstr = evt.target?.result;
+      if (!bstr) return;
 
-        const { error } = await supabase.from('participantes').insert(toInsert);
-        if (error) {
-          alert('Error al insertar registros');
-          console.error(error);
-        } else {
-          alert('Archivo cargado exitosamente');
-          fetchParticipantes();
-        }
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+      // Omitimos la fila 0 (encabezados) y filtramos filas vacías
+      const dataRows = data.slice(1).filter(row => row.length > 0 && row[0]);
+      
+      const toInsert = dataRows.map((row: any[]) => ({
+        documento: String(row[0] || ''),
+        tipo_documento: String(row[1] || ''),
+        nombre: String(row[2] || ''),
+        apellido: String(row[3] || ''),
+        correo: String(row[4] || ''),
+        institucion: String(row[5] || ''),
+        // row[6] es la segunda columna Institución vacía, la omitimos
+        cargo: String(row[7] || ''),
+        telefono: String(row[8] || ''),
+        sexo: String(row[9] || ''),
+        ciudad: String(row[10] || ''),
+        pais: String(row[11] || ''),
+        asistencia: false,
+        origen: 'archivo'
+      }));
+
+      const { error } = await supabase.from('participantes').insert(toInsert);
+      if (error) {
+        alert('Error al insertar registros');
+        console.error(error);
+      } else {
+        alert('Archivo cargado exitosamente');
+        fetchParticipantes();
       }
-    });
+      
+      // Limpiar el input para permitir subir el mismo archivo si es necesario
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const toggleAsistencia = async (id: string, currentState: boolean) => {
@@ -155,7 +169,7 @@ export default function Home() {
           <div className="flex gap-4 mt-4 md:mt-0">
             <input 
               type="file" 
-              accept=".csv" 
+              accept=".xlsx, .xls" 
               ref={fileInputRef} 
               onChange={handleFileUpload} 
               className="hidden" 
