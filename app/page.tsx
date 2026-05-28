@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, ChangeEvent, FormEvent } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import * as XLSX from 'xlsx';
-import { Search, Upload, UserPlus, X, Edit2, Trash2, Download } from 'lucide-react';
+import { Search, Upload, UserPlus, X, Edit2, Trash2, Download, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Participante {
   id: string;
@@ -32,6 +32,12 @@ export default function Home() {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
+  // Nuevos Estados para Eliminación y Notificaciones
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
+  const [toast, setToast] = useState<{ show: boolean, message: string, type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState<{ show: boolean, message: string, onConfirm: () => void }>({ show: false, message: '', onConfirm: () => {} });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const initialFormState = {
@@ -46,6 +52,11 @@ export default function Home() {
     fetchParticipantes();
   }, []);
 
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 4000);
+  };
+
   const fetchParticipantes = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -55,6 +66,7 @@ export default function Home() {
 
     if (error) {
       console.error("Error al cargar datos:", error);
+      showToast('Error al sincronizar base de datos', 'error');
     } else {
       setParticipantes(data || []);
     }
@@ -75,7 +87,6 @@ export default function Home() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-      // Filtramos filas que tengan al menos algún dato, ya no exigimos que el documento (row[0]) exista
       const dataRows = data.slice(1).filter(row => row.some(cell => cell !== undefined && String(cell).trim() !== ''));
       
       let tempIdCounter = 1;
@@ -83,7 +94,6 @@ export default function Home() {
       const toInsert = dataRows.map((row: any[]) => {
         let doc = String(row[0] || '').trim();
         
-        // Asignar ID temporal si no tiene documento
         if (!doc) {
           doc = String(tempIdCounter).padStart(3, '0');
           tempIdCounter++;
@@ -108,10 +118,10 @@ export default function Home() {
 
       const { error } = await supabase.from('participantes').insert(toInsert);
       if (error) {
-        alert('Error al insertar registros. Verifica los permisos RLS en Supabase.');
+        showToast('Error al insertar registros. Verifica los permisos RLS en Supabase.', 'error');
         console.error(error);
       } else {
-        alert('Archivo cargado exitosamente');
+        showToast('Archivo cargado exitosamente', 'success');
         fetchParticipantes();
       }
       
@@ -136,6 +146,7 @@ export default function Home() {
 
     if (error) {
       console.error("Error actualizando asistencia:", error);
+      showToast('Error al actualizar asistencia', 'error');
       setParticipantes((prev: Participante[]) => 
         prev.map(p => p.id === id ? { ...p, asistencia: currentState } : p)
       );
@@ -145,8 +156,6 @@ export default function Home() {
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-
-  // ---- NUEVAS FUNCIONES: CREAR, EDITAR, ELIMINAR, EXPORTAR ----
 
   const handleManualSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -158,10 +167,11 @@ export default function Home() {
 
     const { error } = await supabase.from('participantes').insert([newParticipant]);
     if (error) {
-      alert('Error al registrar participante. Verifica los permisos RLS.');
+      showToast('Error al registrar participante. Verifica los permisos RLS.', 'error');
     } else {
       setShowModal(false);
       setFormData(initialFormState);
+      showToast('Participante registrado con éxito', 'success');
       fetchParticipantes();
     }
   };
@@ -186,29 +196,80 @@ export default function Home() {
       .eq('id', editingId);
 
     if (error) {
-      alert('Error al actualizar participante.');
+      showToast('Error al actualizar participante.', 'error');
     } else {
       setShowEditModal(false);
       setEditingId(null);
       setFormData(initialFormState);
+      showToast('Datos actualizados correctamente', 'success');
       fetchParticipantes();
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar a este participante? Esta acción no se puede deshacer.')) return;
+  // ---- NUEVA LÓGICA DE ELIMINACIÓN Y SELECCIÓN ----
+
+  const executeDelete = async (idsToDelete: string[]) => {
+    // Animación optimista: difuminar los elementos inmediatamente
+    setDeletingIds(prev => [...prev, ...idsToDelete]);
     
-    const { error } = await supabase.from('participantes').delete().eq('id', id);
+    const { error } = await supabase.from('participantes').delete().in('id', idsToDelete);
+    
     if (error) {
-      alert('Error al eliminar participante.');
+      showToast('Error al eliminar participante(s).', 'error');
+      // Revertir animación si hay error
+      setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
     } else {
-      fetchParticipantes();
+      // Eliminar de la UI sin parpadear
+      setParticipantes(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      setSelectedIds(prev => prev.filter(id => !idsToDelete.includes(id)));
+      setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
+      showToast(idsToDelete.length > 1 ? 'Participantes eliminados' : 'Participante eliminado', 'success');
     }
   };
+
+  const promptDelete = (id: string) => {
+    setConfirmDialog({
+      show: true,
+      message: '¿Estás seguro de eliminar a este participante? Esta acción no se puede deshacer.',
+      onConfirm: () => executeDelete([id])
+    });
+  };
+
+  const promptDeleteSelected = () => {
+    setConfirmDialog({
+      show: true,
+      message: `¿Estás seguro de eliminar los ${selectedIds.length} participantes seleccionados?`,
+      onConfirm: () => executeDelete(selectedIds)
+    });
+  };
+
+  const promptDeleteAll = () => {
+    setConfirmDialog({
+      show: true,
+      message: '¡ADVERTENCIA! ¿Estás seguro de eliminar a TODOS los participantes de la base de datos? Esta acción es irreversible.',
+      onConfirm: () => executeDelete(participantes.map(p => p.id))
+    });
+  };
+
+  const handleSelectAll = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredParticipantes.map(p => p.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(selectedId => selectedId !== id) : [...prev, id]
+    );
+  };
+
+  // ------------------------------------------------
 
   const handleExport = () => {
     if (participantes.length === 0) {
-      alert('No hay datos para exportar.');
+      showToast('No hay datos para exportar.', 'error');
       return;
     }
 
@@ -232,9 +293,8 @@ export default function Home() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Participantes");
     XLSX.writeFile(workbook, "Ecos_de_Equidad_Asistencia.xlsx");
+    showToast('Archivo exportado con éxito', 'success');
   };
-
-  // -------------------------------------------------------------
 
   const filteredParticipantes = participantes.filter(p => 
     Object.values(p).some(val => 
@@ -244,6 +304,30 @@ export default function Home() {
 
   return (
     <div className="min-h-screen p-6 md:p-12 font-sans relative overflow-hidden">
+      
+      {/* Toast Notification (Propio del sistema) */}
+      {toast.show && (
+        <div className={`fixed bottom-6 right-6 z-70 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl transform transition-all duration-300 animate-fade-in-up ${toast.type === 'error' ? 'bg-linear-to-r from-red-500 to-rose-600 text-white' : 'bg-linear-to-r from-emerald-500 to-teal-600 text-white'}`}>
+          {toast.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
+          <span className="font-semibold tracking-wide">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Confirm Dialog (Propio del sistema) */}
+      {confirmDialog.show && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-60 transition-opacity">
+          <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgb(0,0,0,0.1)] w-full max-w-md p-8 border border-slate-100 text-center animate-scale-in">
+            <AlertCircle size={56} className="mx-auto text-rose-500 mb-5" />
+            <h3 className="text-2xl font-extrabold text-slate-800 mb-3 tracking-tight">Confirmar Acción</h3>
+            <p className="text-slate-600 font-medium mb-8 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex justify-center gap-4">
+              <button onClick={() => setConfirmDialog({ show: false, message: '', onConfirm: () => {} })} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-all">Cancelar</button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({ show: false, message: '', onConfirm: () => {} }); }} className="px-6 py-3 bg-linear-to-r from-rose-500 to-red-600 text-white rounded-xl font-bold hover:from-rose-600 hover:to-red-700 transition-all shadow-[0_0_15px_rgba(225,29,72,0.4)] hover:shadow-[0_0_25px_rgba(225,29,72,0.6)] transform hover:-translate-y-0.5">Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Elementos decorativos de fondo */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-40"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-40"></div>
@@ -287,8 +371,18 @@ export default function Home() {
               onClick={handleExport}
               className="flex items-center gap-2 bg-linear-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)] font-semibold transform hover:-translate-y-0.5"
             >
-              <Download size={20} /> Exportar Datos
+              <Download size={20} /> Exportar
             </button>
+
+            {/* Botón dinámico Eliminar Todos / Eliminar Seleccionados */}
+            {participantes.length > 0 && (
+              <button 
+                onClick={selectedIds.length > 0 ? promptDeleteSelected : promptDeleteAll}
+                className="flex items-center gap-2 bg-linear-to-r from-rose-500 to-red-500 hover:from-rose-400 hover:to-red-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)] font-semibold transform hover:-translate-y-0.5"
+              >
+                <Trash2 size={20} /> {selectedIds.length > 0 ? `Eliminar (${selectedIds.length})` : 'Eliminar Todos'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -310,6 +404,14 @@ export default function Home() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-widest font-bold">
+                  <th className="p-5 border-b border-slate-100 w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      checked={selectedIds.length === filteredParticipantes.length && filteredParticipantes.length > 0}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
                   <th className="p-5 border-b border-slate-100">Participante</th>
                   <th className="p-5 border-b border-slate-100">Documento</th>
                   <th className="p-5 border-b border-slate-100">Institución</th>
@@ -320,12 +422,23 @@ export default function Home() {
               </thead>
               <tbody className="bg-white/40">
                 {loading ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-indigo-400 font-medium animate-pulse">Sincronizando base de datos...</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-indigo-400 font-medium animate-pulse">Sincronizando base de datos...</td></tr>
                 ) : filteredParticipantes.length === 0 ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-slate-400 font-medium">No hay participantes en el radar.</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-slate-400 font-medium">No hay participantes en el radar.</td></tr>
                 ) : (
                   filteredParticipantes.map((p) => (
-                    <tr key={p.id} className="border-b border-slate-50 hover:bg-indigo-50/40 transition-colors duration-200">
+                    <tr 
+                      key={p.id} 
+                      className={`border-b border-slate-50 hover:bg-indigo-50/40 transition-all duration-500 ${deletingIds.includes(p.id) ? 'opacity-30 blur-[2px] pointer-events-none scale-[0.98]' : 'opacity-100 scale-100'}`}
+                    >
+                      <td className="p-5 text-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          checked={selectedIds.includes(p.id)}
+                          onChange={() => toggleSelection(p.id)}
+                        />
+                      </td>
                       <td className="p-5">
                         <div className="font-bold text-slate-800">{p.nombre} {p.apellido}</div>
                         <div className="text-sm text-slate-500 font-medium">{p.correo}</div>
@@ -366,8 +479,8 @@ export default function Home() {
                             <Edit2 size={18} />
                           </button>
                           <button 
-                            onClick={() => handleDelete(p.id)}
-                            className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
+                            onClick={() => promptDelete(p.id)}
+                            className="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-2 rounded-lg transition-colors"
                             title="Eliminar Participante"
                           >
                             <Trash2 size={18} />
