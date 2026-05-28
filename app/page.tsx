@@ -163,7 +163,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 bg-white/60 backdrop-blur-xl p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80">
           <div>
-            <h1 className="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600 tracking-tight">
+            <h1 className="text-4xl font-extrabold bg-clip-text text-transparent bg-linear-to-r from-blue-700 to-indigo-600 tracking-tight">
               Ecos de Equidad
             </h1>
             <p className="text-indigo-900/60 mt-2 font-medium">Gestión inteligente y control de asistencia</p>
@@ -183,14 +183,14 @@ export default function Home() {
                   fileInputRef.current.click();
                 }
               }}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] font-semibold transform hover:-translate-y-0.5"
+              className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] font-semibold transform hover:-translate-y-0.5"
             >
               <Upload size={20} /> Subir Excel
             </button>
             
             <button 
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(30,41,59,0.3)] hover:shadow-[0_0_25px_rgba(30,41,59,0.5)] font-semibold transform hover:-translate-y-0.5"
+              className="flex items-center gap-2 bg-linear-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(30,41,59,0.3)] hover:shadow-[0_0_25px_rgba(30,41,59,0.5)] font-semibold transform hover:-translate-y-0.5"
             >
               <UserPlus size={20} /> Registro Manual
             </button>
@@ -294,7 +294,7 @@ export default function Home() {
               
               <div className="md:col-span-2 flex justify-end gap-4 mt-6 pt-6 border-t border-slate-100">
                 <button type="button" onClick={() => setShowModal(false)} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-all">Cancelar</button>
-                <button type="submit" className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] transform hover:-translate-y-0.5">Guardar Participante</button>
+                <button type="submit" className="px-6 py-3 bg-linear-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] transform hover:-translate-y-0.5">Guardar Participante</button>
               </div>
             </form>
           </div>
