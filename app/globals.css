@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 body {
-  background-color: #f3f4f6;
-  color: #1f2937;
+  @apply bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen text-slate-800 antialiased;
 }
 
-/* Toggle Switch Styles */
+/* Toggle Switch Styles con Iluminación */
 .toggle-checkbox:checked {
   right: 0;
-  border-color: #10B981;
+  border-color: #4f46e5;
 }
 .toggle-checkbox:checked + .toggle-label {
-  background-color: #10B981;
+  background-color: #4f46e5;
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.6);
 }
 .toggle-checkbox {
   right: 0;
   z-index: 1;
-  border-color: #e5e7eb;
-  transition: all 0.3s;
+  border-color: #cbd5e1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .toggle-label {
-  width: 3rem;
-  height: 1.5rem;
-  background-color: #e5e7eb;
+  width: 3.5rem;
+  height: 1.75rem;
+  background-color: #cbd5e1;
   border-radius: 9999px;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
