@@ -206,20 +206,15 @@ export default function Home() {
     }
   };
 
-  // ---- NUEVA LÓGICA DE ELIMINACIÓN Y SELECCIÓN ----
-
   const executeDelete = async (idsToDelete: string[]) => {
-    // Animación optimista: difuminar los elementos inmediatamente
     setDeletingIds(prev => [...prev, ...idsToDelete]);
     
     const { error } = await supabase.from('participantes').delete().in('id', idsToDelete);
     
     if (error) {
       showToast('Error al eliminar participante(s).', 'error');
-      // Revertir animación si hay error
       setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
     } else {
-      // Eliminar de la UI sin parpadear
       setParticipantes(prev => prev.filter(p => !idsToDelete.includes(p.id)));
       setSelectedIds(prev => prev.filter(id => !idsToDelete.includes(id)));
       setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
@@ -265,15 +260,14 @@ export default function Home() {
     );
   };
 
-  // ------------------------------------------------
-
   const handleExport = () => {
     if (participantes.length === 0) {
       showToast('No hay datos para exportar.', 'error');
       return;
     }
 
-    const dataToExport = participantes.map(p => ({
+    const dataToExport = participantes.map((p, index) => ({
+      'Nº': index + 1,
       'Documento': p.documento,
       'Tipo Documento': p.tipo_documento,
       'Nombres': p.nombre,
@@ -305,7 +299,7 @@ export default function Home() {
   return (
     <div className="min-h-screen p-6 md:p-12 font-sans relative overflow-hidden">
       
-      {/* Toast Notification (Propio del sistema) */}
+      {/* Toast Notification */}
       {toast.show && (
         <div className={`fixed bottom-6 right-6 z-70 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl transform transition-all duration-300 animate-fade-in-up ${toast.type === 'error' ? 'bg-linear-to-r from-red-500 to-rose-600 text-white' : 'bg-linear-to-r from-emerald-500 to-teal-600 text-white'}`}>
           {toast.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle size={24} />}
@@ -313,7 +307,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Confirm Dialog (Propio del sistema) */}
+      {/* Confirm Dialog */}
       {confirmDialog.show && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-60 transition-opacity">
           <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgb(0,0,0,0.1)] w-full max-w-md p-8 border border-slate-100 text-center animate-scale-in">
@@ -374,7 +368,6 @@ export default function Home() {
               <Download size={20} /> Exportar
             </button>
 
-            {/* Botón dinámico Eliminar Todos / Eliminar Seleccionados */}
             {participantes.length > 0 && (
               <button 
                 onClick={selectedIds.length > 0 ? promptDeleteSelected : promptDeleteAll}
@@ -387,17 +380,22 @@ export default function Home() {
         </div>
 
         <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden mb-8 p-8">
-          <div className="relative w-full md:w-1/2 mb-8">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search className="text-indigo-400" size={22} />
+          <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4">
+            <div className="relative w-full md:w-1/2">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="text-indigo-400" size={22} />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar participante por cualquier dato..."
+                className="pl-12 w-full bg-white/50 border border-indigo-100 rounded-2xl py-4 px-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 font-medium shadow-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Buscar participante por cualquier dato..."
-              className="pl-12 w-full bg-white/50 border border-indigo-100 rounded-2xl py-4 px-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 font-medium shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <div className="text-indigo-900/70 font-semibold bg-white/50 px-5 py-3 rounded-xl border border-indigo-50 shadow-sm whitespace-nowrap">
+              Total Participantes: <span className="text-indigo-600 font-bold">{filteredParticipantes.length}</span>
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-100">
@@ -412,6 +410,7 @@ export default function Home() {
                       onChange={handleSelectAll}
                     />
                   </th>
+                  <th className="p-5 border-b border-slate-100 text-center w-12">Nº</th>
                   <th className="p-5 border-b border-slate-100">Participante</th>
                   <th className="p-5 border-b border-slate-100">Documento</th>
                   <th className="p-5 border-b border-slate-100">Institución</th>
@@ -422,11 +421,11 @@ export default function Home() {
               </thead>
               <tbody className="bg-white/40">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-indigo-400 font-medium animate-pulse">Sincronizando base de datos...</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-indigo-400 font-medium animate-pulse">Sincronizando base de datos...</td></tr>
                 ) : filteredParticipantes.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-slate-400 font-medium">No hay participantes en el radar.</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-slate-400 font-medium">No hay participantes en el radar.</td></tr>
                 ) : (
-                  filteredParticipantes.map((p) => (
+                  filteredParticipantes.map((p, index) => (
                     <tr 
                       key={p.id} 
                       className={`border-b border-slate-50 hover:bg-indigo-50/40 transition-all duration-500 ${deletingIds.includes(p.id) ? 'opacity-30 blur-[2px] pointer-events-none scale-[0.98]' : 'opacity-100 scale-100'}`}
@@ -438,6 +437,9 @@ export default function Home() {
                           checked={selectedIds.includes(p.id)}
                           onChange={() => toggleSelection(p.id)}
                         />
+                      </td>
+                      <td className="p-5 text-center font-bold text-slate-400">
+                        {index + 1}
                       </td>
                       <td className="p-5">
                         <div className="font-bold text-slate-800">{p.nombre} {p.apellido}</div>
