@@ -380,8 +380,8 @@ export default function Home() {
         </div>
 
         <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden mb-8 p-8">
-          <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4">
-            <div className="relative w-full md:w-1/2">
+          <div className="flex flex-col lg:flex-row justify-between lg:items-end mb-8 gap-6">
+            <div className="relative w-full lg:w-1/2">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Search className="text-indigo-400" size={22} />
               </div>
@@ -393,8 +393,20 @@ export default function Home() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="text-indigo-900/70 font-semibold bg-white/50 px-5 py-3 rounded-xl border border-indigo-50 shadow-sm whitespace-nowrap">
-              Total Participantes: <span className="text-indigo-600 font-bold">{filteredParticipantes.length}</span>
+            
+            {/* Contadores Estadísticos de Asistencia */}
+            <div className="flex flex-wrap gap-3">
+              <div className="text-indigo-900/70 font-semibold bg-white/50 px-5 py-3 rounded-xl border border-indigo-50 shadow-sm flex items-center gap-2">
+                Total Participantes: <span className="text-indigo-600 font-bold text-lg">{participantes.length}</span>
+              </div>
+              <div className="text-slate-700 font-semibold bg-white/50 px-5 py-3 rounded-xl border border-emerald-50 shadow-sm flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"></span>
+                Han llegado: <span className="text-emerald-600 font-bold text-lg">{participantes.filter(p => p.asistencia).length}</span>
+              </div>
+              <div className="text-slate-700 font-semibold bg-white/50 px-5 py-3 rounded-xl border border-rose-50 shadow-sm flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.6)]"></span>
+                Faltan: <span className="text-rose-600 font-bold text-lg">{participantes.filter(p => !p.asistencia).length}</span>
+              </div>
             </div>
           </div>
 
