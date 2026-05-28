@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, ChangeEvent, FormEvent } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import * as XLSX from 'xlsx';
-import { Search, Upload, UserPlus, X, Edit2, Trash2, Download, AlertCircle, CheckCircle, QrCode } from 'lucide-react';
+import { Search, Upload, UserPlus, X, Edit2, Trash2, Download, AlertCircle, CheckCircle, QrCode, Lock, User, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 
 interface Participante {
@@ -24,6 +24,14 @@ interface Participante {
 }
 
 export default function Home() {
+  // ---- ESTADOS DE AUTENTICACIÓN ----
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // ---- ESTADOS DEL SISTEMA ----
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -47,21 +55,40 @@ export default function Home() {
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // ---- VERIFICAR SESIÓN Y CARGAR DATOS ----
   useEffect(() => {
-    fetchParticipantes();
-    
-    // Configurar suscripción en tiempo real de Supabase
-    const subscription = supabase
-      .channel('public:participantes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'participantes' }, () => {
-        fetchParticipantes();
-      })
-      .subscribe();
+    const authStatus = sessionStorage.getItem('acofi_admin_auth');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+    setIsCheckingAuth(false);
 
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, []);
+    if (authStatus === 'true') {
+      fetchParticipantes();
+      
+      const subscription = supabase
+        .channel('public:participantes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'participantes' }, () => {
+          fetchParticipantes();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(subscription);
+      };
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = (e: FormEvent) => {
+    e.preventDefault();
+    if (loginUser === 'AcofiAdmin' && loginPass === 'AcofiAdmin2030#') {
+      sessionStorage.setItem('acofi_admin_auth', 'true');
+      setIsAuthenticated(true);
+      setLoginError('');
+    } else {
+      setLoginError('Usuario o contraseña incorrectos.');
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
@@ -241,10 +268,88 @@ export default function Home() {
     showToast('Archivo exportado con éxito', 'success');
   };
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('acofi_admin_auth');
+    setIsAuthenticated(false);
+  };
+
   const filteredParticipantes = participantes.filter(p => 
     Object.values(p).some(val => String(val).toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // ---- PANTALLA DE CARGA INICIAL ----
+  if (isCheckingAuth) return null;
+
+  // ---- PANTALLA DE LOGIN ----
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-40"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-40"></div>
+        
+        <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[2.5rem] shadow-[0_20px_50px_rgb(0,0,0,0.1)] border border-white/80 w-full max-w-md relative z-10 animate-fade-in-up">
+          <div className="text-center mb-8">
+            <div className="inline-flex bg-indigo-50 p-4 rounded-full mb-4 shadow-inner">
+              <Lock className="text-indigo-600" size={36} />
+            </div>
+            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">Acceso Restringido</h2>
+            <p className="text-slate-500 font-medium mt-2">Ingresa tus credenciales para administrar el evento</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Usuario</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <User className="text-indigo-400" size={20} />
+                </div>
+                <input 
+                  type="text" 
+                  required
+                  value={loginUser}
+                  onChange={(e) => setLoginUser(e.target.value)}
+                  className="pl-12 w-full bg-white border border-slate-200 rounded-2xl py-4 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700 shadow-sm" 
+                  placeholder="Ej. Admin" 
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Contraseña</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <KeyRound className="text-indigo-400" size={20} />
+                </div>
+                <input 
+                  type="password" 
+                  required
+                  value={loginPass}
+                  onChange={(e) => setLoginPass(e.target.value)}
+                  className="pl-12 w-full bg-white border border-slate-200 rounded-2xl py-4 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700 shadow-sm" 
+                  placeholder="••••••••" 
+                />
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="p-3 bg-red-50 text-red-600 text-sm font-bold rounded-xl text-center flex items-center justify-center gap-2">
+                <AlertCircle size={18} /> {loginError}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              className="w-full py-4 mt-4 bg-linear-to-r from-indigo-600 to-blue-600 text-white rounded-2xl font-extrabold text-lg transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transform hover:-translate-y-1"
+            >
+              Iniciar Sesión
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- PANTALLA DEL SISTEMA PRINCIPAL ----
   return (
     <div className="min-h-screen p-6 md:p-12 font-sans relative overflow-hidden">
       {toast.show && (
@@ -290,23 +395,43 @@ export default function Home() {
             </Link>
 
             <input type="file" accept=".xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.4)] font-semibold transform hover:-translate-y-0.5">
+            
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="flex items-center gap-2 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.4)] font-semibold transform hover:-translate-y-0.5"
+            >
               <Upload size={20} /> Subir Excel
             </button>
             
-            <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-linear-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(30,41,59,0.3)] font-semibold transform hover:-translate-y-0.5">
+            <button 
+              onClick={() => setShowModal(true)} 
+              className="flex items-center gap-2 bg-linear-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(30,41,59,0.3)] font-semibold transform hover:-translate-y-0.5"
+            >
               <UserPlus size={20} /> Registro Manual
             </button>
 
-            <button onClick={handleExport} className="flex items-center gap-2 bg-linear-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.4)] font-semibold transform hover:-translate-y-0.5">
+            <button 
+              onClick={handleExport} 
+              className="flex items-center gap-2 bg-linear-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.4)] font-semibold transform hover:-translate-y-0.5"
+            >
               <Download size={20} /> Exportar
             </button>
 
             {participantes.length > 0 && (
-              <button onClick={selectedIds.length > 0 ? promptDeleteSelected : promptDeleteAll} className="flex items-center gap-2 bg-linear-to-r from-rose-500 to-red-500 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(244,63,94,0.4)] font-semibold transform hover:-translate-y-0.5">
+              <button 
+                onClick={selectedIds.length > 0 ? promptDeleteSelected : promptDeleteAll} 
+                className="flex items-center gap-2 bg-linear-to-r from-rose-500 to-red-500 text-white px-6 py-3 rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(244,63,94,0.4)] font-semibold transform hover:-translate-y-0.5"
+              >
                 <Trash2 size={20} /> {selectedIds.length > 0 ? `Eliminar (${selectedIds.length})` : 'Eliminar Todos'}
               </button>
             )}
+
+            <button 
+              onClick={handleLogout} 
+              className="flex items-center gap-2 bg-white/50 border border-slate-200 hover:bg-slate-100 text-slate-600 px-6 py-3 rounded-xl transition-all font-semibold"
+            >
+              Salir
+            </button>
           </div>
         </div>
 
@@ -316,7 +441,13 @@ export default function Home() {
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Search className="text-indigo-400" size={22} />
               </div>
-              <input type="text" placeholder="Buscar participante por cualquier dato..." className="pl-12 w-full bg-white/50 border border-indigo-100 rounded-2xl py-4 px-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 font-medium shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input 
+                type="text" 
+                placeholder="Buscar participante por cualquier dato..." 
+                className="pl-12 w-full bg-white/50 border border-indigo-100 rounded-2xl py-4 px-4 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 font-medium shadow-sm" 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+              />
             </div>
             
             <div className="flex flex-wrap gap-3">
@@ -338,7 +469,14 @@ export default function Home() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 text-slate-500 text-xs uppercase tracking-widest font-bold">
-                  <th className="p-5 border-b border-slate-100 w-12 text-center"><input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer" checked={selectedIds.length === filteredParticipantes.length && filteredParticipantes.length > 0} onChange={handleSelectAll} /></th>
+                  <th className="p-5 border-b border-slate-100 w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer" 
+                      checked={selectedIds.length === filteredParticipantes.length && filteredParticipantes.length > 0} 
+                      onChange={handleSelectAll} 
+                    />
+                  </th>
                   <th className="p-5 border-b border-slate-100 text-center w-12">Nº</th>
                   <th className="p-5 border-b border-slate-100">Participante</th>
                   <th className="p-5 border-b border-slate-100">Documento</th>
@@ -356,22 +494,52 @@ export default function Home() {
                 ) : (
                   filteredParticipantes.map((p, index) => (
                     <tr key={p.id} className={`border-b border-slate-50 hover:bg-indigo-50/40 transition-all duration-500 ${deletingIds.includes(p.id) ? 'opacity-30 blur-[2px] pointer-events-none scale-[0.98]' : 'opacity-100 scale-100'}`}>
-                      <td className="p-5 text-center"><input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer" checked={selectedIds.includes(p.id)} onChange={() => toggleSelection(p.id)} /></td>
+                      <td className="p-5 text-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer" 
+                          checked={selectedIds.includes(p.id)} 
+                          onChange={() => toggleSelection(p.id)} 
+                        />
+                      </td>
                       <td className="p-5 text-center font-bold text-slate-400">{index + 1}</td>
-                      <td className="p-5"><div className="font-bold text-slate-800">{p.nombre} {p.apellido}</div><div className="text-sm text-slate-500 font-medium">{p.correo}</div></td>
-                      <td className="p-5"><div className="text-slate-800 font-semibold">{p.documento}</div><div className="text-xs text-slate-400 font-medium uppercase tracking-wider">{p.tipo_documento}</div></td>
+                      <td className="p-5">
+                        <div className="font-bold text-slate-800">{p.nombre} {p.apellido}</div>
+                        <div className="text-sm text-slate-500 font-medium">{p.correo}</div>
+                      </td>
+                      <td className="p-5">
+                        <div className="text-slate-800 font-semibold">{p.documento}</div>
+                        <div className="text-xs text-slate-400 font-medium uppercase tracking-wider">{p.tipo_documento}</div>
+                      </td>
                       <td className="p-5 text-slate-600 font-medium">{p.institucion}</td>
-                      <td className="p-5"><span className={`px-4 py-1.5 rounded-full text-xs font-bold tracking-wide ${p.origen === 'manual' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>{p.origen === 'manual' ? 'MANUAL' : 'ARCHIVO'}</span></td>
+                      <td className="p-5">
+                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold tracking-wide ${p.origen === 'manual' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {p.origen === 'manual' ? 'MANUAL' : 'ARCHIVO'}
+                        </span>
+                      </td>
                       <td className="p-5 text-center align-middle">
-                        <div className="relative inline-block w-14 mr-2 align-middle select-none">
-                          <input type="checkbox" id={`toggle-${p.id}`} checked={p.asistencia} onChange={() => toggleAsistencia(p.id, p.asistencia)} className="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 cursor-pointer shadow-sm" />
-                          <label htmlFor={`toggle-${p.id}`} className="toggle-label block overflow-hidden h-7 rounded-full cursor-pointer shadow-inner"></label>
+                        <div className="relative inline-block w-14 mr-2 align-middle select-none transition duration-200 ease-in">
+                          <input 
+                            type="checkbox" 
+                            id={`toggle-${p.id}`} 
+                            checked={p.asistencia} 
+                            onChange={() => toggleAsistencia(p.id, p.asistencia)} 
+                            className="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 appearance-none cursor-pointer shadow-md" 
+                          />
+                          <label 
+                            htmlFor={`toggle-${p.id}`} 
+                            className="toggle-label block overflow-hidden h-7 rounded-full cursor-pointer"
+                          ></label>
                         </div>
                       </td>
                       <td className="p-5 text-center align-middle">
                         <div className="flex justify-center gap-3">
-                          <button onClick={() => openEditModal(p)} className="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors"><Edit2 size={18} /></button>
-                          <button onClick={() => promptDelete(p.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-2 rounded-lg transition-colors"><Trash2 size={18} /></button>
+                          <button onClick={() => openEditModal(p)} className="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors">
+                            <Edit2 size={18} />
+                          </button>
+                          <button onClick={() => promptDelete(p.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-2 rounded-lg transition-colors">
+                            <Trash2 size={18} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -389,11 +557,22 @@ export default function Home() {
           <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgb(0,0,0,0.1)] w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
               <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Registro Manual</h2>
-              <button onClick={() => { setShowModal(false); setFormData(initialFormState); }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-full"><X size={24} /></button>
+              <button onClick={() => { setShowModal(false); setFormData(initialFormState); }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-full">
+                <X size={24} />
+              </button>
             </div>
+            
             <form onSubmit={handleManualSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Nombre *</label><input required type="text" name="nombre" value={formData.nombre} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Apellido *</label><input required type="text" name="apellido" value={formData.apellido} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nombre *</label>
+                <input required type="text" name="nombre" value={formData.nombre} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Apellido *</label>
+                <input required type="text" name="apellido" value={formData.apellido} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Tipo de Documento *</label>
                 <select required name="tipo_documento" value={formData.tipo_documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700">
@@ -405,11 +584,32 @@ export default function Home() {
                   <option value="Otro">Otro</option>
                 </select>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Documento *</label><input required type="text" name="documento" value={formData.documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Correo Electrónico *</label><input required type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Institución *</label><input required type="text" name="institucion" value={formData.institucion} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Cargo *</label><input required type="text" name="cargo" value={formData.cargo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Teléfono *</label><input required type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Documento *</label>
+                <input required type="text" name="documento" value={formData.documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Correo Electrónico *</label>
+                <input required type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Institución *</label>
+                <input required type="text" name="institucion" value={formData.institucion} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Cargo *</label>
+                <input required type="text" name="cargo" value={formData.cargo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Teléfono *</label>
+                <input required type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Sexo *</label>
                 <select required name="sexo" value={formData.sexo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700">
@@ -419,11 +619,24 @@ export default function Home() {
                   <option value="Otro">Otro</option>
                 </select>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Ciudad *</label><input required type="text" name="ciudad" value={formData.ciudad} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">País *</label><input required type="text" name="pais" value={formData.pais} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Ciudad *</label>
+                <input required type="text" name="ciudad" value={formData.ciudad} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-slate-700 mb-2">País *</label>
+                <input required type="text" name="pais" value={formData.pais} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div className="md:col-span-2 flex justify-end gap-4 mt-6 pt-6 border-t border-slate-100">
-                <button type="button" onClick={() => { setShowModal(false); setFormData(initialFormState); }} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100">Cancelar</button>
-                <button type="submit" className="px-6 py-3 bg-linear-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:-translate-y-0.5">Guardar Participante</button>
+                <button type="button" onClick={() => { setShowModal(false); setFormData(initialFormState); }} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-all">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-6 py-3 bg-linear-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] transform hover:-translate-y-0.5 transition-all">
+                  Guardar Participante
+                </button>
               </div>
             </form>
           </div>
@@ -436,11 +649,22 @@ export default function Home() {
           <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgb(0,0,0,0.1)] w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-100">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
               <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Editar Participante</h2>
-              <button onClick={() => { setShowEditModal(false); setEditingId(null); setFormData(initialFormState); }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-full"><X size={24} /></button>
+              <button onClick={() => { setShowEditModal(false); setEditingId(null); setFormData(initialFormState); }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-full transition-all">
+                <X size={24} />
+              </button>
             </div>
+            
             <form onSubmit={handleEditSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Nombre *</label><input required type="text" name="nombre" value={formData.nombre} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Apellido *</label><input required type="text" name="apellido" value={formData.apellido} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nombre *</label>
+                <input required type="text" name="nombre" value={formData.nombre} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Apellido *</label>
+                <input required type="text" name="apellido" value={formData.apellido} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Tipo de Documento *</label>
                 <select required name="tipo_documento" value={formData.tipo_documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700">
@@ -452,11 +676,32 @@ export default function Home() {
                   <option value="Otro">Otro</option>
                 </select>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Documento *</label><input required type="text" name="documento" value={formData.documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Correo Electrónico *</label><input required type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Institución *</label><input required type="text" name="institucion" value={formData.institucion} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Cargo *</label><input required type="text" name="cargo" value={formData.cargo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Teléfono *</label><input required type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Documento *</label>
+                <input required type="text" name="documento" value={formData.documento} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Correo Electrónico *</label>
+                <input required type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Institución *</label>
+                <input required type="text" name="institucion" value={formData.institucion} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Cargo *</label>
+                <input required type="text" name="cargo" value={formData.cargo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Teléfono *</label>
+                <input required type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Sexo *</label>
                 <select required name="sexo" value={formData.sexo} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700">
@@ -466,11 +711,24 @@ export default function Home() {
                   <option value="Otro">Otro</option>
                 </select>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-2">Ciudad *</label><input required type="text" name="ciudad" value={formData.ciudad} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
-              <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">País *</label><input required type="text" name="pais" value={formData.pais} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" /></div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Ciudad *</label>
+                <input required type="text" name="ciudad" value={formData.ciudad} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-slate-700 mb-2">País *</label>
+                <input required type="text" name="pais" value={formData.pais} onChange={handleInputChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none transition-all font-medium text-slate-700" />
+              </div>
+              
               <div className="md:col-span-2 flex justify-end gap-4 mt-6 pt-6 border-t border-slate-100">
-                <button type="button" onClick={() => { setShowEditModal(false); setEditingId(null); setFormData(initialFormState); }} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100">Cancelar</button>
-                <button type="submit" className="px-6 py-3 bg-linear-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:-translate-y-0.5">Actualizar Datos</button>
+                <button type="button" onClick={() => { setShowEditModal(false); setEditingId(null); setFormData(initialFormState); }} className="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-all">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-6 py-3 bg-linear-to-r from-blue-600 to-blue-500 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.5)] transform hover:-translate-y-0.5 transition-all">
+                  Actualizar Datos
+                </button>
               </div>
             </form>
           </div>

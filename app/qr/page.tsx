@@ -8,7 +8,6 @@ export default function VistaQR() {
   const [registroUrl, setRegistroUrl] = useState('');
 
   useEffect(() => {
-    // Genera automáticamente la URL basándose en el dominio actual
     setRegistroUrl(`${window.location.origin}/registro`);
   }, []);
 
@@ -43,12 +42,6 @@ export default function VistaQR() {
               <span className="text-slate-400 font-bold">Generando QR...</span>
             </div>
           )}
-        </div>
-
-        <div className="mt-12 inline-block bg-white/10 backdrop-blur-md border border-white/20 px-8 py-4 rounded-full">
-          <p className="text-slate-200 font-mono text-lg tracking-wider">
-            {registroUrl.replace(/^https?:\/\//, '')}
-          </p>
         </div>
       </div>
     </div>
